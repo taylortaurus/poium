@@ -17,6 +17,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from .page_objects import NewPageElement
 from .page_objects import PageElement
 from .page_objects import PageElements
 from .page_objects import PageSelect
@@ -26,4 +27,4 @@ from .javascript import CSSElement
 
 __author__ = "fnngj"
 
-__version__ = "0.5.1"
+__version__ = "0.6.3"

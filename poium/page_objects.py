@@ -1,13 +1,19 @@
-import logging
+import warnings
+import platform
 from time import sleep
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.select import Select
 from selenium.common.exceptions import NoSuchElementException
-
+from selenium.common.exceptions import StaleElementReferenceException
+from selenium.common.exceptions import WebDriverException
 from appium.webdriver.common.mobileby import MobileBy
+from poium.common.exceptions import PageSelectException
+from poium.common.exceptions import PageElementError
+from poium.common.exceptions import FindElementTypesError
+from poium.common import logging
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 
 # Map PageElement constructor arguments to webdriver locator enums
 LOCATOR_LIST = {
@@ -26,14 +32,20 @@ LOCATOR_LIST = {
     'ios_class_chain': MobileBy.IOS_CLASS_CHAIN,
     'android_uiautomator': MobileBy.ANDROID_UIAUTOMATOR,
     'android_viewtag': MobileBy.ANDROID_VIEWTAG,
-    'android_datamatcher': MobileBy.ANDROID_DATA_MATCHER,
+    'android_data_matcher': MobileBy.ANDROID_DATA_MATCHER,
+    'android_view_matcher': MobileBy.ANDROID_VIEW_MATCHER,
+    'windows_uiautomation': MobileBy.WINDOWS_UI_AUTOMATION,
     'accessibility_id': MobileBy.ACCESSIBILITY_ID,
     'image': MobileBy.IMAGE,
     'custom': MobileBy.CUSTOM,
 }
 
 
-class PageObject:
+class Browser:
+    driver = None
+
+
+class PageObject(object):
     """
     Page Object pattern.
     """
@@ -56,14 +68,16 @@ class PageObject:
         self.driver.get(root_uri + uri)
         self.driver.implicitly_wait(5)
 
-    def run_script(self, js=None):
+    def run_script(self, js=None, *args):
         """
         run JavaScript script
         """
+        warnings.warn("use execute_script instead",
+                      DeprecationWarning, stacklevel=2)
         if js is None:
             raise ValueError("Please input js script")
         else:
-            self.driver.execute_script(js)
+            self.driver.execute_script(js, *args)
 
 
 class PageElement(object):
@@ -83,13 +97,13 @@ class PageElement(object):
         Use this partial link text locator
     :param tag:    `str`
         Use this tag name locator
-    :param class_:    `str`
+    :param class_name:    `str`
         Use this class locator
     :param context: `bool`
         This element is expected to be called with context
     Page Elements are used to access elements on a page. The are constructed
     using this factory method to specify the locator for the element.
-        >> from page import Page, PageElement
+        >> from poium import Page, PageElement
         >> class MyPage(Page):
                 elem1 = PageElement(css='div.myclass')
                 elem2 = PageElement(id_='foo')
@@ -97,8 +111,12 @@ class PageElement(object):
     Page Elements act as property descriptors for their Page Object, you can get
     and set them as normal attributes.
     """
-    def __init__(self, context=False, timeout=5, describe=None, **kwargs):
+
+    def __init__(self, context=False, timeout=4, log=False, describe="", **kwargs):
+        warnings.warn("use NewPageElement instead", DeprecationWarning, stacklevel=2)
         self.time_out = timeout
+        self.log = log
+        self.describe = describe
         if not kwargs:
             raise ValueError("Please specify a locator")
         if len(kwargs) > 1:
@@ -107,7 +125,7 @@ class PageElement(object):
         try:
             self.locator = (LOCATOR_LIST[self.k], self.v)
         except KeyError:
-            raise KeyError("Please use a locator：'id_'、'name'、'class_name'、'css'、'xpath'、'link_text'、'partial_link_text'.")
+            raise FindElementTypesError("Element positioning of type '{}' is not supported. ".format(self.k))
         self.has_context = bool(context)
 
     def get_element(self, context):
@@ -119,13 +137,14 @@ class PageElement(object):
             try:
                 style_red = 'arguments[0].style.border="2px solid red"'
                 context.execute_script(style_red, elem)
-            except BaseException:
+            except WebDriverException:
                 return elem
             return elem
 
     def find(self, context):
         for i in range(1, self.time_out):
-            logger.info("{n} times search, {elm} ".format(n=i, elm=self.locator))
+            if self.log is True:
+                logging.info("{desc}, {n} times search, {elm} ".format(desc=self.describe, n=i, elm=self.locator))
             if self.get_element(context) is not None:
                 return self.get_element(context)
         else:
@@ -145,10 +164,10 @@ class PageElement(object):
 
     def __set__(self, instance, value):
         if self.has_context:
-            raise ValueError("Sorry, the set descriptor doesn't support elements with context.")
+            raise PageElementError("Sorry, the set descriptor doesn't support elements with context.")
         elem = self.__get__(instance, instance.__class__)
         if not elem:
-            raise ValueError("Can't set value, element not found")
+            raise PageElementError("Can't set value, element not found")
         elem.send_keys(value)
 
 
@@ -169,10 +188,10 @@ class PageElements(PageElement):
 
     def __set__(self, instance, value):
         if self.has_context:
-            raise ValueError("Sorry, the set descriptor doesn't support elements with context.")
+            raise PageElementError("Sorry, the set descriptor doesn't support elements with context.")
         elems = self.__get__(instance, instance.__class__)
         if not elems:
-            raise ValueError("Can't set value, no elements found")
+            raise PageElementError("Can't set value, no elements found")
         [elem.send_keys(value) for elem in elems]
 
 
@@ -180,7 +199,9 @@ class PageSelect(object):
     """
     Processing select drop-down selection box
     """
+
     def __init__(self, select_elem, value=None, text=None, index=None):
+        warnings.warn("use NewPageElement instead", DeprecationWarning, stacklevel=2)
         if value is not None:
             Select(select_elem).select_by_value(value)
         elif text is not None:
@@ -188,12 +209,13 @@ class PageSelect(object):
         elif index is not None:
             Select(select_elem).select_by_index(index)
         else:
-            raise ValueError('"value" or "text" or "index" options can not be all empty.')
+            raise PageSelectException('"value" or "text" or "index" options can not be all empty.')
 
 
 class PageWait(object):
 
     def __init__(self, elm, timeout=3):
+        warnings.warn("use NewPageElement instead", DeprecationWarning, stacklevel=2)
         """
         wait webelement display
         """
@@ -213,3 +235,408 @@ class PageWait(object):
         else:
             raise TimeoutError("Timeout, element invisible")
 
+
+class NewPageElement(object):
+    """
+    new Page element class
+    """
+
+    def __init__(self, timeout=5, describe="undefined", index=0, **kwargs):
+        self.timeout = timeout
+        self.index = index
+        self.desc = describe
+        if not kwargs:
+            raise ValueError("Please specify a locator")
+        if len(kwargs) > 1:
+            raise ValueError("Please specify only one locator")
+        self.kwargs = kwargs
+        self.k, self.v = next(iter(kwargs.items()))
+
+        if self.k not in LOCATOR_LIST.keys():
+            raise FindElementTypesError("Element positioning of type '{}' is not supported.".format(self.k))
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return None
+
+        Browser.driver = instance.driver
+        return self
+
+    def __set__(self, instance, value):
+        self.__get__(instance, instance.__class__)
+        self.send_keys(value)
+
+    def __find_element(self, elem):
+        """
+        Find if the element exists.
+        """
+        for i in range(self.timeout):
+            elems = Browser.driver.find_elements(by=elem[0], value=elem[1])
+            if len(elems) == 1:
+                logging.info("✅ Find element: {by}={value} ".format(
+                    by=elem[0], value=elem[1]))
+                break
+            elif len(elems) > 1:
+                logging.info("❓ Find {n} elements through: {by}={value}".format(
+                    n=len(elems), by=elem[0], value=elem[1]))
+                break
+            else:
+                sleep(1)
+        else:
+            error_msg = "❌ Find 0 elements through: {by}={value}".format(by=elem[0], value=elem[1])
+            logging.error(error_msg)
+            raise NoSuchElementException(error_msg)
+
+    def __get_element(self, by, value):
+        """
+        Judge element positioning way, and returns the element.
+        """
+
+        # selenium
+        if by == "id_":
+            self.__find_element((By.ID, value))
+            elem = Browser.driver.find_elements_by_id(value)[self.index]
+        elif by == "name":
+            self.__find_element((By.NAME, value))
+            elem = Browser.driver.find_elements_by_name(value)[self.index]
+        elif by == "class_name":
+            self.__find_element((By.CLASS_NAME, value))
+            elem = Browser.driver.find_elements_by_class_name(value)[self.index]
+        elif by == "tag":
+            self.__find_element((By.TAG_NAME, value))
+            elem = Browser.driver.find_elements_by_tag_name(value)[self.index]
+        elif by == "link_text":
+            self.__find_element((By.LINK_TEXT, value))
+            elem = Browser.driver.find_elements_by_link_text(value)[self.index]
+        elif by == "partial_link_text":
+            self.__find_element((By.PARTIAL_LINK_TEXT, value))
+            elem = Browser.driver.find_elements_by_partial_link_text(value)[self.index]
+        elif by == "xpath":
+            self.__find_element((By.XPATH, value))
+            elem = Browser.driver.find_elements_by_xpath(value)[self.index]
+        elif by == "css":
+            self.__find_element((By.CSS_SELECTOR, value))
+            elem = Browser.driver.find_elements_by_css_selector(value)[self.index]
+
+        # appium
+        elif by == "ios_uiautomation":
+            self.__find_element((MobileBy.IOS_UIAUTOMATION, value))
+            elem = Browser.driver.find_elements_by_ios_uiautomation(value)[self.index]
+        elif by == "ios_predicate":
+            self.__find_element((MobileBy.IOS_PREDICATE, value))
+            elem = Browser.driver.find_elements_by_ios_predicate(value)[self.index]
+        elif by == "ios_class_chain":
+            self.__find_element((MobileBy.IOS_CLASS_CHAIN, value))
+            elem = Browser.driver.find_elements_by_ios_class_chain(value)[self.index]
+        elif by == "android_uiautomator":
+            self.__find_element((MobileBy.ANDROID_UIAUTOMATOR, value))
+            elem = Browser.driver.find_elements_by_android_uiautomator(value)[self.index]
+        elif by == "android_viewtag":
+            self.__find_element((MobileBy.ANDROID_VIEWTAG, value))
+            elem = Browser.driver.find_elements_by_android_viewtag(value)[self.index]
+        elif by == "android_data_matcher":
+            self.__find_element((MobileBy.ANDROID_DATA_MATCHER, value))
+            elem = Browser.driver.find_elements_by_android_data_matcher(value)[self.index]
+        elif by == "accessibility_id":
+            self.__find_element((MobileBy.ACCESSIBILITY_ID, value))
+            elem = Browser.driver.find_elements_by_accessibility_id(value)[self.index]
+        elif by == "android_view_matcher":
+            self.__find_element((MobileBy.ANDROID_VIEW_MATCHER, value))
+            elem = Browser.driver.find_elements_by_android_view_matcher(value)[self.index]
+        elif by == "windows_uiautomation":
+            self.__find_element((MobileBy.WINDOWS_UI_AUTOMATION, value))
+            elem = Browser.driver.find_elements_by_windows_uiautomation(value)[self.index]
+        elif by == "image":
+            self.__find_element((MobileBy.IMAGE, value))
+            elem = Browser.driver.find_elements_by_image(value)[self.index]
+        elif by == "custom":
+            self.__find_element((MobileBy.CUSTOM, value))
+            elem = Browser.driver.find_elements_by_custom(value)[self.index]
+        else:
+            raise FindElementTypesError(
+                "Please enter the correct targeting elements")
+        try:
+            style_red = 'arguments[0].style.border="2px solid #FF0000"'
+            style_blue = 'arguments[0].style.border="2px solid #00FF00"'
+            style_null = 'arguments[0].style.border=""'
+
+            for _ in range(2):
+                Browser.driver.execute_script(style_red, elem)
+                sleep(0.1)
+                Browser.driver.execute_script(style_blue, elem)
+                sleep(0.1)
+            Browser.driver.execute_script(style_blue, elem)
+            sleep(0.5)
+            Browser.driver.execute_script(style_null, elem)
+        except WebDriverException:
+            pass
+
+        return elem
+
+    def clear(self):
+        """Clears the text if it's a text entry element."""
+        elem = self.__get_element(self.k, self.v)
+        logging.info("clear element: {}".format(self.desc))
+        elem.clear()
+
+    def send_keys(self, value):
+        """
+        Simulates typing into the element.
+        """
+        elem = self.__get_element(self.k, self.v)
+        logging.info("🖋 input element: {}".format(self.desc))
+        elem.send_keys(value)
+
+    def click(self):
+        """Clicks the element."""
+        elem = self.__get_element(self.k, self.v)
+        logging.info("🖱 click element: {}".format(self.desc))
+        elem.click()
+
+    def submit(self):
+        """Submits a form."""
+        elem = self.__get_element(self.k, self.v)
+        logging.info("submit element: {}".format(self.desc))
+        elem.submit()
+
+    @property
+    def tag_name(self):
+        """This element's ``tagName`` property."""
+        elem = self.__get_element(self.k, self.v)
+        return elem.tag_name
+
+    @property
+    def text(self):
+        """Clears the text if it's a text entry element."""
+        elem = self.__get_element(self.k, self.v)
+        return elem.text
+
+    @property
+    def size(self):
+        """The size of the element."""
+        elem = self.__get_element(self.k, self.v)
+        return elem.size
+
+    def get_property(self, name):
+        """
+        Gets the given property of the element.
+        """
+        elem = self.__get_element(self.k, self.v)
+        return elem.get_property(name)
+
+    def get_attribute(self, name):
+        """Gets the given attribute or property of the element."""
+        elem = self.__get_element(self.k, self.v)
+        return elem.get_attribute(name)
+
+    def is_displayed(self):
+        """Whether the element is visible to a user."""
+        elem = self.__get_element(self.k, self.v)
+        return elem.is_displayed()
+
+    def is_selected(self):
+        """Returns whether the element is selected.
+
+        Can be used to check if a checkbox or radio button is selected.
+        """
+        elem = self.__get_element(self.k, self.v)
+        return elem.is_selected()
+
+    def is_enabled(self):
+        """Returns whether the element is enabled."""
+        elem = self.__get_element(self.k, self.v)
+        return elem.is_enabled()
+
+    def switch_to_frame(self):
+        """
+        selenium API
+        Switches focus to the specified frame
+        """
+        elem = self.__get_element(self.k, self.v)
+        Browser.driver.switch_to.frame(elem)
+
+    def move_to_element(self):
+        """
+        selenium API
+        Moving the mouse to the middle of an element
+        """
+        elem = self.__get_element(self.k, self.v)
+        ActionChains(Browser.driver).move_to_element(elem).perform()
+
+    def click_and_hold(self):
+        """
+        selenium API
+        Holds down the left mouse button on an element.
+        """
+        elem = self.__get_element(self.k, self.v)
+        ActionChains(Browser.driver).click_and_hold(elem).perform()
+
+    def context_click(self):
+        """
+        selenium API
+        Performs a context-click (right click) on an element.
+        """
+        elem = self.__get_element(self.k, self.v)
+        ActionChains(Browser.driver).context_click(elem).perform()
+
+    def drag_and_drop_by_offset(self, x, y):
+        """
+        selenium API
+        Holds down the left mouse button on the source element,
+           then moves to the target offset and releases the mouse button.
+        :param x: X offset to move to.
+        :param y: Y offset to move to.
+        """
+        elem = self.__get_element(self.k, self.v)
+        ActionChains(Browser.driver).drag_and_drop_by_offset(elem, xoffset=x, yoffset=y).perform()
+
+    def refresh_element(self, timeout=10):
+        """
+        selenium API
+        Refreshes the current page, retrieve elements.
+        """
+        try:
+            timeout_int = int(timeout)
+        except TypeError:
+            raise ValueError("Type 'timeout' error, must be type int() ")
+
+        elem = self.__get_element(self.k, self.v)
+        for i in range(timeout_int):
+            if elem is not None:
+                try:
+                    elem
+                except StaleElementReferenceException:
+                    Browser.driver.refresh()
+                else:
+                    break
+            else:
+                sleep(1)
+        else:
+            raise TimeoutError("stale element reference: element is not attached to the page document.")
+
+    def select_by_value(self, value):
+        """
+        selenium API
+        Select all options that have a value matching the argument. That is, when given "foo" this
+           would select an option like:
+
+           <option value="foo">Bar</option>
+
+           :Args:
+            - value - The value to match against
+
+           throws NoSuchElementException If there is no option with specisied value in SELECT
+        """
+        select_elem = self.__get_element(self.k, self.v)
+        Select(select_elem).select_by_value(value)
+
+    def select_by_index(self, text):
+        """
+        selenium API
+        Select the option at the given index. This is done by examing the "index" attribute of an
+           element, and not merely by counting.
+
+           :Args:
+            - index - The option at this index will be selected
+
+           throws NoSuchElementException If there is no option with specisied index in SELECT
+        """
+        select_elem = self.__get_element(self.k, self.v)
+        Select(select_elem).select_by_index(text)
+
+    def select_by_visible_text(self, text):
+        """
+        selenium API
+        Select all options that display text matching the argument. That is, when given "Bar" this
+           would select an option like:
+
+            <option value="foo">Bar</option>
+
+           :Args:
+            - text - The visible text to match against
+
+            throws NoSuchElementException If there is no option with specisied text in SELECT
+        """
+        select_elem = self.__get_element(self.k, self.v)
+        Select(select_elem).select_by_visible_text(text)
+
+    def set_text(self, keys):
+        """
+        appium API
+        Sends text to the element.
+        """
+        elem = self.__get_element(self.k, self.v)
+        elem.set_text(keys)
+        return self
+
+    @property
+    def location_in_view(self):
+        """
+        appium API
+        Gets the location of an element relative to the view.
+        Returns:
+            dict: The location of an element relative to the view
+        """
+        elem = self.__get_element(self.k, self.v)
+        return elem.location_in_view()
+
+    def set_value(self, value):
+        """
+        appium API
+        Set the value on this element in the application
+        """
+        elem = self.__get_element(self.k, self.v)
+        elem.set_value(value)
+        return self
+
+    def input(self, text=""):
+        elem = self.__get_element(self.k, self.v)
+        elem.send_keys(text)
+
+    def enter(self):
+        elem = self.__get_element(self.k, self.v)
+        elem.send_keys(Keys.ENTER)
+
+    def select_all(self):
+        elem = self.__get_element(self.k, self.v)
+        if platform.system().lower() == "darwin":
+            elem.send_keys(Keys.COMMAND, "a")
+        else:
+            elem.send_keys(Keys.CONTROL, "a")
+
+    def cut(self):
+        elem = self.__get_element(self.k, self.v)
+        if platform.system().lower() == "darwin":
+            elem.send_keys(Keys.COMMAND, "x")
+        else:
+            elem.send_keys(Keys.CONTROL, "x")
+
+    def copy(self):
+        elem = self.__get_element(self.k, self.v)
+        if platform.system().lower() == "darwin":
+            elem.send_keys(Keys.COMMAND, "c")
+        else:
+            elem.send_keys(Keys.CONTROL, "c")
+
+    def paste(self):
+        elem = self.__get_element(self.k, self.v)
+        if platform.system().lower() == "darwin":
+            elem.send_keys(Keys.COMMAND, "v")
+        else:
+            elem.send_keys(Keys.CONTROL, "v")
+
+    def backspace(self):
+        elem = self.__get_element(self.k, self.v)
+        elem.send_keys(Keys.BACKSPACE)
+
+    def delete(self):
+        elem = self.__get_element(self.k, self.v)
+        elem.send_keys(Keys.DELETE)
+
+    def tab(self):
+        elem = self.__get_element(self.k, self.v)
+        elem.send_keys(Keys.TAB)
+
+    def space(self):
+        elem = self.__get_element(self.k, self.v)
+        elem.send_keys(Keys.SPACE)

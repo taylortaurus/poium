@@ -1,6 +1,5 @@
-## poium
 
-<img src="./poium_logo.gif"  height="150">
+![](logo.png)
 
 基于 selenium/appium 的 Page Objects 设计模式测试库。
 
@@ -20,21 +19,25 @@ pip install:
 If you want to keep up with the latest version, you can install with github repository url:
 
 ```shell
-> pip install -U git+https://github.com/defnngj/poium.git@master
+> pip install -U git+https://github.com/SeldomQA/poium.git@master
 ```
+
+__说明__
+
+> 在 `0.6.0` 版本提供了`NewPageElement`类，用新的方式重新实现了`PageElement`类的大部分功能。 推荐使用`NewPageElement` 类。
 
 ## Sample
 
-支持Selenium的例子。
+#### Selenium的使用（selenium API）
 
 ```python
-from poium import Page, PageElement
+from poium import Page, NewPageElement
 from selenium import webdriver
 
 
 class BaiduIndexPage(Page):
-    search_input = PageElement(name='wd')
-    search_button = PageElement(id_='su')
+    search_input = NewPageElement(name='wd')
+    search_button = NewPageElement(id_='su')
 
 
 driver = webdriver.Chrome()
@@ -47,8 +50,11 @@ page.search_button.click()
 
 driver.quit()
 ```
+* [selenium](https://pypi.org/project/selenium/)
 
-还提供了一套JavaScript封装的API。
+#### Selenium的使用（JavaScript API）
+
+poium还提供了一套JavaScript封装的API。
 
 ```python
 from poium import Page, CSSElement
@@ -70,18 +76,22 @@ page.search_button.click()
 
 driver.quit()
 ```
+* 只支持 `css` 定位，所以不需要指定定位方式。
+* 更多的元素操作，例如：`remove_attribute()` 、 `clear_style()` ... 等。
+
+#### appium的使用
 
 支持appium的例子。
 
 ```python
-from poium import Page, PageElement
+from poium import Page, NewPageElement
 from appium import webdriver
 
 class CalculatorPage(Page):
-    number_1 = PageElement(id_="com.android.calculator2:id/digit_1")
-    number_2 = PageElement(id_="com.android.calculator2:id/digit_2")
-    add = PageElement(id_="com.android.calculator2:id/op_add")
-    eq = PageElement(id_="com.android.calculator2:id/eq")
+    number_1 = NewPageElement(id_="com.android.calculator2:id/digit_1")
+    number_2 = NewPageElement(id_="com.android.calculator2:id/digit_2")
+    add = NewPageElement(id_="com.android.calculator2:id/op_add")
+    eq = NewPageElement(id_="com.android.calculator2:id/eq")
 
 # APP定义运行环境
 desired_caps = {
@@ -103,11 +113,15 @@ page.eq.click()
 driver.quit()
 ```
 
-使用poium将元素 __定位__ 与 __操作__ 分离，这将会非常有助于规模化自动化测试用例的编写与维护。
+* [appium](https://pypi.org/project/Appium-Python-Client/)
 
 ## Documentation
 
 请阅读 [wiki](https://github.com/defnngj/poium/wiki)
+
+* 在基于pytest的自动化项目中的应用，请点击[这里](https://github.com/defnngj/pyautoTest) 。
+
+* 在基于seldom自动化测试框架的应用，请点击[这里](https://github.com/SeldomQA/seldom) 。
 
 ## Project History
 

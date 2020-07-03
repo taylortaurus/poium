@@ -1,11 +1,13 @@
 import os
 import time
+import warnings
 from time import sleep
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import StaleElementReferenceException
+from selenium.common.exceptions import NoAlertPresentException
 from appium.webdriver.common.touch_action import TouchAction as MobileTouchAction
 
-from .page_objects import PageObject
+from poium.page_objects import PageObject
 
 
 class Page(PageObject):
@@ -13,6 +15,15 @@ class Page(PageObject):
     Implement the APIs with javascript,
     and selenium/appium extension APIs。
     """
+
+    def execute_script(self, js=None, *args):
+        """
+        Execute JavaScript scripts.
+        """
+        if js is None:
+            raise ValueError("Please input js script")
+        
+        return self.driver.execute_script(js, *args)
 
     def window_scroll(self, width=None, height=None):
         """
@@ -23,8 +34,8 @@ class Page(PageObject):
             width = "0"
         if height is None:
             height = "0"
-        js = "window.scrollTo({w},{h});".format(w=width, h=height)
-        self.driver.execute_script(js)
+        js = "window.scrollTo({w},{h});".format(w=str(width), h=(height))
+        self.execute_script(js)
 
     @property
     def get_title(self):
@@ -33,7 +44,7 @@ class Page(PageObject):
         Get page title.
         """
         js = 'return document.title;'
-        return self.driver.execute_script(js)
+        return self.execute_script(js)
 
     @property
     def get_url(self):
@@ -42,13 +53,15 @@ class Page(PageObject):
         Get page URL.
         """
         js = "return document.URL;"
-        return self.driver.execute_script(js)
+        return self.execute_script(js)
 
     def switch_to_frame(self, frame_reference):
         """
         selenium API
         Switches focus to the specified frame, by id, name, or webelement.
         """
+        warnings.warn("use driver.elem.switch_to_frame() instead",
+                      DeprecationWarning, stacklevel=2)
         self.driver.switch_to.frame(frame_reference)
 
     def switch_to_parent_frame(self):
@@ -65,15 +78,8 @@ class Page(PageObject):
         selenium API
         Getting a handle to a new window.
         """
-        original_window = self.driver.current_window_handle
-        all_handles = self.driver.window_handles
-        for handle in all_handles:
-            if handle != original_window:
-                new_handle = handle
-                break
-        else:
-            new_handle = None
-        return new_handle
+        all_handle = self.window_handles
+        return all_handle[-1]
 
     @property
     def current_window_handle(self):
@@ -112,6 +118,59 @@ class Page(PageObject):
         file_path = os.path.join(path, filename)
         self.driver.save_screenshot(file_path)
 
+    def get_cookies(self):
+        """
+        Returns a set of dictionaries, corresponding to cookies visible in the current session.
+        """
+        return self.driver.get_cookies()
+
+    def get_cookie(self, name):
+        """
+        Returns information of cookie with ``name`` as an object.
+        """
+        return self.driver.get_cookie(name)
+
+    def add_cookie(self, cookie_dict):
+        """
+        Adds a cookie to your current session.
+        Usage:
+            add_cookie({'name' : 'foo', 'value' : 'bar'})
+        """
+        if isinstance(cookie_dict, dict):
+            self.driver.add_cookie(cookie_dict)
+        else:
+            raise TypeError("Wrong cookie type.")
+
+    def add_cookies(self, cookie_list):
+        """
+        Adds a cookie to your current session.
+        Usage:
+            cookie_list = [
+                {'name' : 'foo', 'value' : 'bar'},
+                {'name' : 'foo', 'value' : 'bar'}
+            ]
+            add_cookie(cookie_list)
+        """
+        if isinstance(cookie_list, list):
+            for cookie in cookie_list:
+                self.add_cookie(cookie)
+        else:
+            raise TypeError("Wrong cookie type.")
+
+    def delete_cookie(self, name):
+        """
+        Deletes a single cookie with the given name.
+        """
+        self.driver.delete_cookie(name)
+
+    def delete_all_cookies(self):
+        """
+        Delete all cookies in the scope of the session.
+        Usage:
+            self.delete_all_cookies()
+        """
+        self.driver.delete_all_cookies()
+
     def switch_to_app(self):
         """
         appium API
@@ -149,6 +208,18 @@ class Page(PageObject):
         """
         self.driver.switch_to.alert.dismiss()
 
+    def alert_is_display(self):
+        """
+        selenium API
+        Determines if alert is displayed
+        """
+        try:
+            self.driver.switch_to.alert
+        except NoAlertPresentException:
+            return False
+        else:
+            return True
+
     @property
     def get_alert_text(self):
         """
@@ -162,6 +233,8 @@ class Page(PageObject):
         selenium API
         Moving the mouse to the middle of an element
         """
+        warnings.warn("use driver.elem.move_to_element() instead",
+                      DeprecationWarning, stacklevel=2)
         ActionChains(self.driver).move_to_element(elem).perform()
 
     def click_and_hold(self, elem):
@@ -169,6 +242,8 @@ class Page(PageObject):
         selenium API
         Holds down the left mouse button on an element.
         """
+        warnings.warn("use driver.elem.click_and_hold() instead",
+                      DeprecationWarning, stacklevel=2)
         ActionChains(self.driver).click_and_hold(elem).perform()
 
     def move_by_offset(self, x, y):
@@ -194,6 +269,8 @@ class Page(PageObject):
         selenium API
         Performs a context-click (right click) on an element.
         """
+        warnings.warn("use driver.elem.context_click() instead",
+                      DeprecationWarning, stacklevel=2)
         ActionChains(self.driver).context_click(elem).perform()
 
     def drag_and_drop_by_offset(self, elem, x, y):
@@ -205,6 +282,8 @@ class Page(PageObject):
         :param x: X offset to move to.
         :param y: Y offset to move to.
         """
+        warnings.warn("use driver.elem.drag_and_drop_by_offset(x, y) instead",
+                      DeprecationWarning, stacklevel=2)
         ActionChains(self.driver).drag_and_drop_by_offset(elem, xoffset=x, yoffset=y).perform()
 
     def refresh_element(self, elem, timeout=10):
@@ -212,6 +291,8 @@ class Page(PageObject):
         selenium API
         Refreshes the current page, retrieve elements.
         """
+        warnings.warn("use driver.elem.refresh_element() instead",
+                      DeprecationWarning, stacklevel=2)
         try:
             timeout_int = int(timeout)
         except TypeError:

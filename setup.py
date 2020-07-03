@@ -15,7 +15,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 setup(
     name='poium',
     version=version,
-    url='https://github.com/defnngj/poium',
+    url='https://github.com/SeldomQA/poium',
     license='BSD',
     author='fnngj',
     author_email='fnngj@126.com',
@@ -25,7 +25,9 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     zip_safe=False,
-    install_requires=['selenium>=3.14.1', 'Appium-Python-Client>=0.39'],
+    install_requires=['selenium>=3.14.1',
+                      'Appium-Python-Client==1.0.1',
+                      'colorama>=0.4.3'],
     classifiers=[
         'Intended Audience :: Developers',
         'Operating System :: MacOS :: MacOS X',
