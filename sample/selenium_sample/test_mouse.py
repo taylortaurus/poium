@@ -1,20 +1,20 @@
 from poium import Page
-from poium import NewPageElement as PageElement
+from poium import Element
 from time import sleep
 
 
 class BaiduPage(Page):
-    setting = PageElement(css='div#u1 > a.pf')
-    search_setting = PageElement(css=".setpref")
-    search_setting_hint = PageElement(css="#sugConf th")
+    setting = Element(css='#s-usersetting-top')
+    search_setting = Element(css=".setpref")
+    search_setting_hint = Element(css="#sugConf > span.item-desc")
 
 
 class DataTimePage(Page):
-    frame = PageElement(id_="iframe")
-    date = PageElement(id_="appDate")
-    year = PageElement(css=".dwwo", index=0)
-    mouth = PageElement(css=".dwwo", index=1)
-    day = PageElement(css=".dwwo", index=2)
+    frame = Element(id_="iframe")
+    date = Element(id_="appDate")
+    year = Element(css=".dwwo", index=0)
+    mouth = Element(css=".dwwo", index=1)
+    day = Element(css=".dwwo", index=2)
 
 
 def test_move_to_element(browser):
@@ -29,7 +29,7 @@ def test_move_to_element(browser):
     page.search_setting.click()
     sleep(2)
     hint = page.search_setting_hint.text
-    assert hint == "搜索框提示："
+    assert "搜索框提示：" in hint
 
 
 def test_drag_and_drop_by_offset(browser):
